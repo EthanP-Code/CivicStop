@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CivitStop — Report a bus stop</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css?v=2">
+  <script src="/static/app.js?v=2" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to form</a>
+
+  <header class="site-header">
+    <div class="wrap">
+      <p class="brand"><span class="brand-mark" aria-hidden="true"></span>CivitStop</p>
+      <h1>Report conditions at a Raleigh bus stop</h1>
+      <p class="lede">Share a photo and what you noticed. You'll get a reference number right away, and an AI-assisted report shortly after.</p>
+    </div>
+  </header>
+
+  <main id="main" class="wrap">
+    <div id="error-summary" class="error-summary" role="alert" tabindex="-1" hidden></div>
+
+    <form id="report-form" novalidate>
+      <div class="field">
+        <label for="image">Photo of the bus stop</label>
+        <p id="image-hint" class="hint">JPEG or PNG, up to 5 MB. Avoid photos where people's faces are identifiable.</p>
+        <input type="file" id="image" name="image" accept="image/jpeg,image/png" required
+               aria-describedby="image-hint image-error">
+        <p id="image-error" class="field-error"></p>
+        <img id="image-preview" class="preview" alt="Preview of your selected photo" hidden>
+      </div>
+
+      <fieldset class="field">
+        <legend>Location</legend>
+        <div class="segmented">
+          <input type="radio" id="loc-mode-address" name="loc-mode" value="address" checked>
+          <label for="loc-mode-address">Address or intersection</label>
+          <input type="radio" id="loc-mode-gps" name="loc-mode" value="gps">
+          <label for="loc-mode-gps">GPS coordinates</label>
+        </div>
+
+        <div id="address-group" class="subgroup">
+          <label for="address">Bus stop address or intersection</label>
+          <input type="text" id="address" name="address" maxlength="256" autocomplete="street-address"
+                 aria-describedby="location-error">
+        </div>
+
+        <div id="gps-group" class="subgroup" hidden>
+          <button type="button" id="use-gps" class="btn btn-secondary">Use my current location</button>
+          <p id="gps-status" class="hint" aria-live="polite"></p>
+          <div class="coords">
+            <div>
+              <label for="latitude">Latitude</label>
+              <input type="text" id="latitude" name="latitude" inputmode="decimal" autocomplete="off"
+                     aria-describedby="location-error" disabled>
+            </div>
+            <div>
+              <label for="longitude">Longitude</label>
+              <input type="text" id="longitude" name="longitude" inputmode="decimal" autocomplete="off"
+                     aria-describedby="location-error" disabled>
+            </div>
+          </div>
+        </div>
+        <p id="location-error" class="field-error"></p>
+      </fieldset>
+
+      <div class="field">
+        <label for="email">Email</label>
+        <p id="email-hint" class="hint">Stored with your report. We won't send you email.</p>
+        <input type="email" id="email" name="email" maxlength="254" autocomplete="email" required
+               aria-describedby="email-hint email-error">
+        <p id="email-error" class="field-error"></p>
+      </div>
+
+      <fieldset id="observations" class="field" aria-describedby="obs-hint observations-error" tabindex="-1">
+        <legend>What did you notice? (choose at least one)</legend>
+        <p id="obs-hint" class="hint">These are your observations. The photo may not confirm them.</p>
+        <div class="checks">
+          <label class="check"><input type="checkbox" name="observations" value="trees_vegetation"><span>Trees / vegetation</span></label>
+          <label class="check"><input type="checkbox" name="observations" value="missing_shelter"><span>Missing bus shelter</span></label>
+          <label class="check"><input type="checkbox" name="observations" value="missing_seating"><span>Missing seating</span></label>
+          <label class="check"><input type="checkbox" name="observations" value="trash_cans"><span>Trash cans</span></label>
+          <label class="check"><input type="checkbox" name="observations" value="bus_info_posters"><span>Bus information posters</span></label>
+          <label class="check"><input type="checkbox" name="observations" value="signage"><span>Signage</span></label>
+        </div>
+        <p id="observations-error" class="field-error"></p>
+      </fieldset>
+
+      <button type="submit" id="submit-btn" class="btn btn-primary">Submit report</button>
+    </form>
+
+    <p id="lookup-switch" class="switch">Already submitted?
+      <button type="button" id="show-lookup" class="btn btn-link">Look up a report</button></p>
+
+    <form id="lookup-form" class="panel" novalidate hidden aria-labelledby="lookup-heading">
+      <h2 id="lookup-heading" tabindex="-1">Look up a report</h2>
+      <p class="hint">Enter the reference and receipt token you saved when you submitted.</p>
+      <div class="field">
+        <label for="lookup-ref">Reference</label>
+        <input type="text" id="lookup-ref" name="reference" maxlength="32" autocomplete="off"
+               autocapitalize="characters" spellcheck="false" placeholder="BUS-2026-XXXXXXXX"
+               aria-describedby="lookup-ref-error">
+        <p id="lookup-ref-error" class="field-error"></p>
+      </div>
+      <div class="field">
+        <label for="lookup-token">Receipt token</label>
+        <input type="text" id="lookup-token" name="receipt_token" maxlength="128" autocomplete="off"
+               autocapitalize="off" spellcheck="false" aria-describedby="lookup-token-error">
+        <p id="lookup-token-error" class="field-error"></p>
+      </div>
+      <button type="submit" id="lookup-btn" class="btn btn-primary">View report</button>
+      <button type="button" id="hide-lookup" class="btn btn-link">Back to submit a report</button>
+    </form>
+
+    <section id="receipt" class="panel" aria-labelledby="receipt-heading" hidden>
+      <h2 id="receipt-heading" tabindex="-1"><span class="tick" aria-hidden="true">✓</span> <span id="receipt-title">Submitted successfully</span></h2>
+      <dl class="receipt-grid">
+        <dt>Reference</dt>
+        <dd><code id="ref-id"></code> <button type="button" id="copy-ref" class="btn btn-link">Copy reference</button></dd>
+        <dt>Receipt token</dt>
+        <dd><code id="ref-token" class="token"></code> <button type="button" id="copy-token" class="btn btn-link">Copy token</button></dd>
+        <dt>Status</dt>
+        <dd><span id="status-text" class="status" data-status="pending">Pending: waiting for analysis</span></dd>
+      </dl>
+      <p id="status-live" class="visually-hidden" aria-live="polite"></p>
+      <p id="poll-message" class="hint"></p>
+      <button type="button" id="check-again" class="btn btn-secondary" hidden>Check again</button>
+      <p class="note">Save the reference and receipt token. Use them with “Look up a report” to see this report later. The token can't be recovered if it's lost.</p>
+      <button type="button" id="new-report" class="btn btn-secondary">Submit another report</button>
+    </section>
+
+    <section id="report-view" class="panel report" aria-labelledby="report-heading" hidden>
+      <h2 id="report-heading" tabindex="-1">Your bus stop report</h2>
+      <div id="report-body"></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap"><p>AI-assisted observation tool. Not an official city reporting channel.</p></div>
+  </footer>
+</body>
+</html>
