@@ -187,3 +187,10 @@ To use a different database, set `TEST_DATABASE_URL` (default `postgresql://civi
 - Only JPEG and PNG are accepted (not WebP or HEIC).
 - The page checks for a report automatically for 5 minutes only; after that the rider clicks **Check again**.
 - Without an `Idempotency-Key`, duplicate network requests can create separate submissions (the bundled UI always sends one).
+
+
+## Team Members
+
+- Naveen Kumar Sriramoju
+- Ethan Patel
+- Digvijay Sonvane
