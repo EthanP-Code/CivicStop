@@ -48,7 +48,11 @@ def pool(settings):
 
 
 @pytest.fixture(autouse=True)
-def clean(pool):
+def clean(request):
+    if request.node.get_closest_marker("no_db"):
+        yield
+        return
+    pool = request.getfixturevalue("pool")
     with pool.connection() as conn:
         conn.execute("TRUNCATE jobs, submissions")
     yield

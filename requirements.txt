@@ -6,3 +6,4 @@ email-validator>=2.1
 pillow>=10.3
 psycopg[binary,pool]>=3.2
 boto3>=1.34
+httpx>=0.27

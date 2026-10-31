@@ -1,6 +1,6 @@
 # StopShade
 
-Report conditions at a Raleigh bus stop. A rider submits a photo, location, email and what they noticed, and gets a tracking reference immediately. A separate background worker then uses Gemma 4 to write a structured, provenance-aware report onto the same record.
+Report conditions at a Raleigh bus stop. A rider submits a photo, location, email and what they noticed, and gets a tracking reference immediately. A separate background worker then uses Gemini Flash to write a structured, provenance-aware report onto the same record.
 
 StopShade is an AI-assisted observation tool. It is **not** an official city reporting channel, does not file tickets with any agency, and does not send email.
 
@@ -12,7 +12,7 @@ Browser form ──POST──▶ FastAPI ──▶ Spaces (private image)
                          └──▶ PostgreSQL: submissions row (pending) + jobs row, one transaction
                          ◀── 202 + reference ID + receipt token (never waits for AI)
 
-Worker (separate process) ──claims job──▶ Gemma 4 ──▶ validated report on the same row
+Worker (separate process) ──claims job──▶ Gemini Flash ──▶ validated report on the same row
 Browser ──GET with receipt token──▶ status / report
 ```
 
@@ -30,6 +30,16 @@ uvicorn app.main:app --port 8080
 
 Open http://localhost:8080.
 
+Run the worker separately after adding `GEMINI_API_KEY` to its environment:
+
+```bash
+python -m app.worker
+```
+
+The API does not require the Gemini key. The worker claims jobs with a PostgreSQL
+lease, downloads each private image, requests schema-constrained JSON from Gemini,
+validates it locally with Pydantic, and retries transient failures up to three times.
+
 Tests run against a real local PostgreSQL database and a mocked S3 bucket:
 
 ```bash
@@ -45,7 +55,11 @@ TEST_DATABASE_URL=postgresql://USER:PASS@localhost:5432/stopshade_test pytest -q
 | `SPACES_BUCKET`, `SPACES_REGION`, `SPACES_ENDPOINT`, `SPACES_ACCESS_KEY`, `SPACES_SECRET_KEY` | API, worker | bucket must be private |
 | `TOKEN_HASH_SECRET` | API | ≥32 bytes, base64; keys the receipt-token and idempotency-key hashes |
 | `MAX_IMAGE_BYTES` | API | default 5 MB |
-| `GEMINI_API_KEY` | worker | |
+| `GEMINI_API_KEY` | worker | required; keep it out of source control |
+| `GEMINI_MODEL` | worker | default `gemini-flash-latest` |
+| `GEMINI_TIMEOUT_SECONDS` | worker | default `45` |
+| `WORKER_POLL_SECONDS` | worker | default `2` |
+| `WORKER_LEASE_SECONDS` | worker | default `120` |
 
 ## API
 

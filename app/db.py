@@ -81,6 +81,120 @@ def get_submission(pool: ConnectionPool, reference_id: str) -> dict | None:
         ).fetchone()
 
 
+def claim_job(pool: ConnectionPool, worker_id: str, lease_seconds: int) -> dict | None:
+    """Claim one ready job without blocking other workers."""
+    with pool.connection() as conn:
+        with conn.transaction():
+            job = conn.execute(
+                """
+                UPDATE jobs SET locked_by = %s,
+                                locked_until = now() + (%s * interval '1 second'),
+                                attempts = attempts + 1
+                WHERE id = (
+                    SELECT j.id FROM jobs j
+                    JOIN submissions s ON s.id = j.submission_id
+                    WHERE j.done_at IS NULL
+                      AND j.next_run_at <= now()
+                      AND (j.locked_until IS NULL OR j.locked_until < now())
+                      AND j.attempts < j.max_attempts
+                      AND s.status IN ('pending', 'processing')
+                    ORDER BY j.next_run_at, j.id
+                    FOR UPDATE OF j SKIP LOCKED
+                    LIMIT 1
+                )
+                RETURNING id AS job_id, submission_id, attempts, max_attempts
+                """,
+                (worker_id, lease_seconds),
+            ).fetchone()
+            if job is None:
+                return None
+            conn.execute(
+                """
+                UPDATE submissions SET status = 'processing', updated_at = now()
+                WHERE id = %s AND status = 'pending'
+                """,
+                (job["submission_id"],),
+            )
+            submission = conn.execute(
+                """
+                SELECT id, reference_id, created_at, location, observations,
+                       image_key, image_content_type
+                FROM submissions WHERE id = %s
+                """,
+                (job["submission_id"],),
+            ).fetchone()
+            return {**submission, **job}
+
+
+def complete_job(pool: ConnectionPool, job_id: int, submission_id, report: dict) -> None:
+    """Persist a validated report and finish the job atomically."""
+    with pool.connection() as conn:
+        with conn.transaction():
+            conn.execute(
+                """
+                UPDATE submissions
+                SET status = 'completed', report = %s, error_metadata = NULL, updated_at = now()
+                WHERE id = %s AND status <> 'completed'
+                """,
+                (Jsonb(report), submission_id),
+            )
+            conn.execute(
+                """
+                UPDATE jobs
+                SET done_at = now(), locked_by = NULL, locked_until = NULL
+                WHERE id = %s
+                """,
+                (job_id,),
+            )
+
+
+def fail_or_retry_job(
+    pool: ConnectionPool,
+    job_id: int,
+    submission_id,
+    attempts: int,
+    max_attempts: int,
+    code: str,
+) -> bool:
+    """Release a failed job for retry, or permanently fail it.
+
+    Returns True when no attempts remain.
+    """
+    exhausted = attempts >= max_attempts
+    delay_seconds = min(300, 5 * (2 ** max(0, attempts - 1)))
+    with pool.connection() as conn:
+        with conn.transaction():
+            if exhausted:
+                conn.execute(
+                    """
+                    UPDATE submissions
+                    SET status = 'failed', report = NULL,
+                        error_metadata = %s, updated_at = now()
+                    WHERE id = %s AND status <> 'completed'
+                    """,
+                    (Jsonb({"code": code}), submission_id),
+                )
+                conn.execute(
+                    """
+                    UPDATE jobs
+                    SET done_at = now(), locked_by = NULL, locked_until = NULL
+                    WHERE id = %s
+                    """,
+                    (job_id,),
+                )
+            else:
+                conn.execute(
+                    """
+                    UPDATE jobs
+                    SET next_run_at = now() + (%s * interval '1 second'),
+                        locked_by = NULL, locked_until = NULL
+                    WHERE id = %s
+                    """,
+                    (delay_seconds, job_id),
+                )
+    return exhausted
+
+
 def ping(pool: ConnectionPool) -> bool:
     with pool.connection() as conn:
         return conn.execute("SELECT 1 AS ok").fetchone()["ok"] == 1

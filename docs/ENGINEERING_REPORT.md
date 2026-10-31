@@ -14,7 +14,7 @@ Status as of 2026-10-31, ~12:20 ET. Scope of this pass: **API + UI**. The worker
 | Receipt token auth on `GET /api/v1/submissions/{ref}` | **LIVE (local)** | tests + curl |
 | Idempotency (`Idempotency-Key`) incl. concurrent duplicates | **LIVE (local)** | tests |
 | Status polling + report rendering in UI | **LIVE (local)**; report content shown was a **FIXTURE** | Headless Chrome run below |
-| Gemma 4 worker | **NOT IMPLEMENTED** | |
+| Gemini Flash worker | **IMPLEMENTED; provider call not live-tested** | `app/worker.py`, `app/gemini.py`, worker tests |
 | DigitalOcean App Platform / Managed PostgreSQL / Spaces | **NOT IMPLEMENTED** (no credentials provided yet) | |
 | Verified organization contact directory | **NOT IMPLEMENTED**; UI shows "Contact not verified." | |
 
@@ -35,9 +35,12 @@ applied: 001_init.sql
 ### Automated tests (real PostgreSQL, mocked S3)
 ```
 $ python -m pytest -q
-47 passed in 5.88s
+51 passed in 2.12s
 ```
 Covered: happy path (address+JPEG, GPS+PNG), unique references, idempotent replay, 4 concurrent same-key POSTs → one row/one job/one object, each missing field → 422 with correct `field`, bad observations (empty, duplicate, unknown, non-array, non-string), bad locations (10 cases incl. 257-char address, lat 91, lat `true`, lat only, extra keys, control chars), bad emails, text file as `.jpg` → 415, PNG declared as JPEG → 415, truncated JPEG → 415, 5 MB+1 → 413, empty → 422, Spaces failure → 503 with no row, DB failure → 503 with object cleaned up, `completed` without report rejected by CHECK, missing/Basic auth → 401, wrong token and unknown reference → identical 404, token for another submission → 404, GET body has no email/`@`/image key/token hash, failed status returns only the sanitized message, logs at INFO contain no email/token/idempotency key/image key.
+
+Worker coverage: schema-constrained Gemini request construction, trusted-field assembly,
+invalid model output rejection, successful job completion, and delayed retry release.
 
 ### Live submit with no worker running
 ```
@@ -69,6 +72,7 @@ HTTP 202 in 0.029682s
 - **FIXTURE report** written directly to the row (labeled "FIXTURE (not a model output)") with `<img onerror>` in the description: rendered as literal text, 0 injected elements, no script ran; "Contact not verified." shown; focus moved to report heading.
 
 ### Not yet performed
+- Live Gemini request with a freshly rotated API key.
 - Screen reader (VoiceOver/NVDA) pass — manual.
 - Real browser offline/retry test — manual.
 - Anything on DigitalOcean.
