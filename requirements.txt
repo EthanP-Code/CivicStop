@@ -1,0 +1,8 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+pydantic>=2.7
+email-validator>=2.1
+pillow>=10.3
+psycopg[binary,pool]>=3.2
+boto3>=1.34
