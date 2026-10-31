@@ -98,9 +98,7 @@ def sniff_image(data: bytes, declared_type: str | None) -> str:
         raise ApiError(415, "UNSUPPORTED_MEDIA", MSG_IMAGE_TYPE, "image")
     if fmt != pil_format:
         raise ApiError(415, "UNSUPPORTED_MEDIA", MSG_IMAGE_TYPE, "image")
-    declared = (declared_type or "").split(";")[0].strip().lower()
-    if declared == "image/jpg":
-        declared = "image/jpeg"
-    if declared and declared not in ("application/octet-stream",) and declared != sniffed:
-        raise ApiError(415, "UNSUPPORTED_MEDIA", MSG_IMAGE_TYPE, "image")
+    # Browsers infer the upload MIME type from the filename. A valid JPEG named
+    # .png is therefore commonly declared image/png. The verified bytes are the
+    # source of truth; callers cannot influence the stored type or extension.
     return sniffed

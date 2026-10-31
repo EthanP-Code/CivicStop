@@ -179,10 +179,13 @@ def test_text_file_renamed_jpg(client, pool):
     assert rows(pool) == []
 
 
-def test_png_declared_as_jpeg(client, pool, png):
+def test_mislabeled_image_uses_detected_type(client, pool, png):
     r = post(client, png, ctype="image/jpeg")
-    assert r.status_code == 415
-    assert rows(pool) == []
+    assert r.status_code == 202
+    with pool.connection() as conn:
+        row = conn.execute("SELECT image_content_type, image_key FROM submissions").fetchone()
+    assert row["image_content_type"] == "image/png"
+    assert row["image_key"].endswith(".png")
 
 
 def test_truncated_jpeg(client, jpeg):

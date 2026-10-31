@@ -190,7 +190,7 @@
     const add = (field, message) => errors.push({ target: setFieldError(field, message), message });
 
     const file = imageInput.files[0];
-    if (!file || !ALLOWED.includes(file.type)) add("image", MSG.image);
+    if (!file) add("image", MSG.image);
     else if (file.size > MAX_BYTES) add("image", MSG.imageSize);
 
     if (mode() === "gps") {
@@ -291,10 +291,23 @@
   // The server checks the real bytes, so re-encode those as JPEG once per selected file.
   async function uploadableImage(file) {
     if (converted && converted.source === file) return converted.file;
+    // Send browser-recognized JPEG/PNG files directly. The server verifies the
+    // bytes and canonicalizes mislabeled files such as a JPEG named .png.
+    if (ALLOWED.includes(file.type)) return file;
     const head = new Uint8Array(await file.slice(0, 8).arrayBuffer());
     const isJpeg = head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff;
     const isPng = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((b, i) => head[i] === b);
-    if (isJpeg || isPng) return file;
+    if (isJpeg || isPng) {
+      const detectedType = isJpeg ? "image/jpeg" : "image/png";
+      if (file.type === detectedType) return file;
+      const extension = isJpeg ? ".jpg" : ".png";
+      const name = file.name.replace(/\.[^.]*$/, "") + extension;
+      converted = {
+        source: file,
+        file: new File([file], name, { type: detectedType, lastModified: file.lastModified }),
+      };
+      return converted.file;
+    }
 
     const bitmap = await createImageBitmap(file);
     const canvas = document.createElement("canvas");
