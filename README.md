@@ -1,4 +1,4 @@
-# CivitStop
+# CivicStop
 
 Report conditions at a Raleigh bus stop. A rider submits a photo, location, email and what they noticed, and gets a tracking reference and receipt token immediately. A separate background worker then uses Gemma 4 to write a structured, provenance-aware report onto the same record. The rider can view the report on the same page, or later with **Look up a report**.
 
