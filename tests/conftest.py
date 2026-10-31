@@ -17,9 +17,9 @@ from app.migrate import migrate
 from app.storage import Storage
 
 TEST_DB = os.environ.get(
-    "TEST_DATABASE_URL", "postgresql://stopshade:localdev@localhost:5432/stopshade_test"
+    "TEST_DATABASE_URL", "postgresql://civitstop:localdev@localhost:5432/civitstop_test"
 )
-BUCKET = "stopshade-test"
+BUCKET = "civitstop-test"
 
 
 @pytest.fixture(scope="session")
@@ -48,11 +48,7 @@ def pool(settings):
 
 
 @pytest.fixture(autouse=True)
-def clean(request):
-    if request.node.get_closest_marker("no_db"):
-        yield
-        return
-    pool = request.getfixturevalue("pool")
+def clean(pool):
     with pool.connection() as conn:
         conn.execute("TRUNCATE jobs, submissions")
     yield

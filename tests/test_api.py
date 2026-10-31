@@ -1,3 +1,4 @@
+import io
 import json
 import logging
 import threading
@@ -6,6 +7,7 @@ import time
 import psycopg
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from app.main import create_app
 from tests.conftest import BUCKET, TEST_DB, bucket_keys
@@ -179,13 +181,20 @@ def test_text_file_renamed_jpg(client, pool):
     assert rows(pool) == []
 
 
-def test_mislabeled_image_uses_detected_type(client, pool, png):
+def test_png_declared_as_jpeg(client, pool, png):
     r = post(client, png, ctype="image/jpeg")
+    assert r.status_code == 415
+    assert rows(pool) == []
+
+
+def test_multi_picture_jpeg_accepted(client, pool):
+    buf = io.BytesIO()
+    Image.new("RGB", (64, 48)).save(
+        buf, "MPO", save_all=True, append_images=[Image.new("RGB", (64, 48))]
+    )
+    r = post(client, buf.getvalue())
     assert r.status_code == 202
-    with pool.connection() as conn:
-        row = conn.execute("SELECT image_content_type, image_key FROM submissions").fetchone()
-    assert row["image_content_type"] == "image/png"
-    assert row["image_key"].endswith(".png")
+    assert len(rows(pool)) == 1
 
 
 def test_truncated_jpeg(client, jpeg):

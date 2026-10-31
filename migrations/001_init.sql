@@ -1,4 +1,4 @@
--- StopShade schema v1: submissions + durable jobs outbox.
+-- CivitStop schema v1: submissions + durable jobs outbox.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 

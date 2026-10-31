@@ -175,6 +175,10 @@ code { font-family: var(--mono); font-size: 1.05rem; font-weight: 700; letter-sp
 .status[data-status="failed"]::before { content: "✕"; color: var(--error); }
 
 .note { color: var(--ink-soft); font-size: .95rem; margin: 16px 0; }
+code.token { font-size: .9rem; font-weight: 600; letter-spacing: 0; }
+.switch { margin: 16px 0 0; text-align: center; color: var(--ink-soft); }
+.switch[hidden], #lookup-form[hidden] { display: none; }
+#lookup-form .btn-link { display: block; margin: 8px auto 0; }
 .panel .btn-secondary + .note, #check-again { margin-top: 8px; }
 
 /* Report */

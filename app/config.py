@@ -4,7 +4,7 @@ import logging
 import os
 from dataclasses import dataclass
 
-log = logging.getLogger("stopshade.config")
+log = logging.getLogger("civitstop.config")
 
 OBSERVATION_CATEGORIES = (
     "trees_vegetation",
@@ -39,11 +39,6 @@ class Settings:
     spaces_secret_key: str
     token_hash_secret: bytes
     max_image_bytes: int
-    gemini_api_key: str | None = None
-    gemini_model: str = "gemini-flash-latest"
-    gemini_timeout_seconds: float = 45.0
-    worker_poll_seconds: float = 2.0
-    worker_lease_seconds: int = 120
 
 
 def _decode_secret(raw: str) -> bytes:
@@ -71,9 +66,4 @@ def load_settings() -> Settings:
         spaces_secret_key=os.environ["SPACES_SECRET_KEY"],
         token_hash_secret=_decode_secret(os.environ["TOKEN_HASH_SECRET"]),
         max_image_bytes=int(os.environ.get("MAX_IMAGE_BYTES", "5242880")),
-        gemini_api_key=os.environ.get("GEMINI_API_KEY"),
-        gemini_model=os.environ.get("GEMINI_MODEL", "gemini-flash-latest"),
-        gemini_timeout_seconds=float(os.environ.get("GEMINI_TIMEOUT_SECONDS", "45")),
-        worker_poll_seconds=float(os.environ.get("WORKER_POLL_SECONDS", "2")),
-        worker_lease_seconds=int(os.environ.get("WORKER_LEASE_SECONDS", "120")),
     )

@@ -6,7 +6,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-log = logging.getLogger("stopshade.errors")
+log = logging.getLogger("civitstop.errors")
 
 
 class ApiError(Exception):

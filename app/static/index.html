@@ -3,17 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>StopShade — Report a bus stop</title>
+  <title>CivitStop — Report a bus stop</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/static/app.css">
-  <script src="/static/app.js" defer></script>
+  <link rel="stylesheet" href="/static/app.css?v=2">
+  <script src="/static/app.js?v=2" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to form</a>
 
   <header class="site-header">
     <div class="wrap">
-      <p class="brand"><span class="brand-mark" aria-hidden="true"></span>StopShade</p>
+      <p class="brand"><span class="brand-mark" aria-hidden="true"></span>CivitStop</p>
       <h1>Report conditions at a Raleigh bus stop</h1>
       <p class="lede">Share a photo and what you noticed. You'll get a reference number right away, and an AI-assisted report shortly after.</p>
     </div>
@@ -91,18 +91,43 @@
       <button type="submit" id="submit-btn" class="btn btn-primary">Submit report</button>
     </form>
 
+    <p id="lookup-switch" class="switch">Already submitted?
+      <button type="button" id="show-lookup" class="btn btn-link">Look up a report</button></p>
+
+    <form id="lookup-form" class="panel" novalidate hidden aria-labelledby="lookup-heading">
+      <h2 id="lookup-heading" tabindex="-1">Look up a report</h2>
+      <p class="hint">Enter the reference and receipt token you saved when you submitted.</p>
+      <div class="field">
+        <label for="lookup-ref">Reference</label>
+        <input type="text" id="lookup-ref" name="reference" maxlength="32" autocomplete="off"
+               autocapitalize="characters" spellcheck="false" placeholder="BUS-2026-XXXXXXXX"
+               aria-describedby="lookup-ref-error">
+        <p id="lookup-ref-error" class="field-error"></p>
+      </div>
+      <div class="field">
+        <label for="lookup-token">Receipt token</label>
+        <input type="text" id="lookup-token" name="receipt_token" maxlength="128" autocomplete="off"
+               autocapitalize="off" spellcheck="false" aria-describedby="lookup-token-error">
+        <p id="lookup-token-error" class="field-error"></p>
+      </div>
+      <button type="submit" id="lookup-btn" class="btn btn-primary">View report</button>
+      <button type="button" id="hide-lookup" class="btn btn-link">Back to submit a report</button>
+    </form>
+
     <section id="receipt" class="panel" aria-labelledby="receipt-heading" hidden>
-      <h2 id="receipt-heading" tabindex="-1"><span class="tick" aria-hidden="true">✓</span> Submitted successfully</h2>
+      <h2 id="receipt-heading" tabindex="-1"><span class="tick" aria-hidden="true">✓</span> <span id="receipt-title">Submitted successfully</span></h2>
       <dl class="receipt-grid">
         <dt>Reference</dt>
         <dd><code id="ref-id"></code> <button type="button" id="copy-ref" class="btn btn-link">Copy reference</button></dd>
+        <dt>Receipt token</dt>
+        <dd><code id="ref-token" class="token"></code> <button type="button" id="copy-token" class="btn btn-link">Copy token</button></dd>
         <dt>Status</dt>
         <dd><span id="status-text" class="status" data-status="pending">Pending: waiting for analysis</span></dd>
       </dl>
       <p id="status-live" class="visually-hidden" aria-live="polite"></p>
       <p id="poll-message" class="hint"></p>
       <button type="button" id="check-again" class="btn btn-secondary" hidden>Check again</button>
-      <p class="note">Keep this tab open to see your report. Closing this browser tab ends access to it.</p>
+      <p class="note">Save the reference and receipt token. Use them with “Look up a report” to see this report later. The token can't be recovered if it's lost.</p>
       <button type="button" id="new-report" class="btn btn-secondary">Submit another report</button>
     </section>
 

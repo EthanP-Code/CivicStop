@@ -1,6 +1,6 @@
-# Engineering report — StopShade
+# Engineering report — CivitStop
 
-Status as of 2026-10-31, ~12:20 ET. Scope of this pass: **API + UI**. The worker and DigitalOcean deployment are not yet built.
+Status as of 2026-10-31, ~13:12 ET. API, UI and worker are built and tested locally. **No live Gemma 4 call has succeeded yet** and nothing is deployed to DigitalOcean.
 
 ## Feature status
 
@@ -14,7 +14,9 @@ Status as of 2026-10-31, ~12:20 ET. Scope of this pass: **API + UI**. The worker
 | Receipt token auth on `GET /api/v1/submissions/{ref}` | **LIVE (local)** | tests + curl |
 | Idempotency (`Idempotency-Key`) incl. concurrent duplicates | **LIVE (local)** | tests |
 | Status polling + report rendering in UI | **LIVE (local)**; report content shown was a **FIXTURE** | Headless Chrome run below |
-| Gemini Flash worker | **IMPLEMENTED; provider call not live-tested** | `app/worker.py`, `app/gemini.py`, worker tests |
+| Worker: atomic claim with lease, same-row update, retries with backoff, terminal failure, lease recovery | **LIVE (local)** against a **STAND-IN model** | `tests/test_worker.py` |
+| Strict report-schema validation; server fills reference, time, location, observations, contact | **LIVE (local)** | `tests/test_worker.py` |
+| Real Gemma 4 image call (`gemma-4-26b-a4b-it` via Gemini API) | **NOT VERIFIED.** Build sandbox network policy blocks `generativelanguage.googleapis.com` (proxy 403 on CONNECT; the key was never sent to Google). Run `scripts/smoke_gemma.py` from a machine with normal network access. | |
 | DigitalOcean App Platform / Managed PostgreSQL / Spaces | **NOT IMPLEMENTED** (no credentials provided yet) | |
 | Verified organization contact directory | **NOT IMPLEMENTED**; UI shows "Contact not verified." | |
 
@@ -35,12 +37,10 @@ applied: 001_init.sql
 ### Automated tests (real PostgreSQL, mocked S3)
 ```
 $ python -m pytest -q
-51 passed in 2.12s
+65 passed in 8.19s
 ```
+(47 API tests + 18 worker/schema tests.)
 Covered: happy path (address+JPEG, GPS+PNG), unique references, idempotent replay, 4 concurrent same-key POSTs → one row/one job/one object, each missing field → 422 with correct `field`, bad observations (empty, duplicate, unknown, non-array, non-string), bad locations (10 cases incl. 257-char address, lat 91, lat `true`, lat only, extra keys, control chars), bad emails, text file as `.jpg` → 415, PNG declared as JPEG → 415, truncated JPEG → 415, 5 MB+1 → 413, empty → 422, Spaces failure → 503 with no row, DB failure → 503 with object cleaned up, `completed` without report rejected by CHECK, missing/Basic auth → 401, wrong token and unknown reference → identical 404, token for another submission → 404, GET body has no email/`@`/image key/token hash, failed status returns only the sanitized message, logs at INFO contain no email/token/idempotency key/image key.
-
-Worker coverage: schema-constrained Gemini request construction, trusted-field assembly,
-invalid model output rejection, successful job completion, and delayed retry release.
 
 ### Live submit with no worker running
 ```
@@ -71,8 +71,11 @@ HTTP 202 in 0.029682s
 - GPS mode: address input disabled, coordinate inputs shown.
 - **FIXTURE report** written directly to the row (labeled "FIXTURE (not a model output)") with `<img onerror>` in the description: rendered as literal text, 0 injected elements, no script ran; "Contact not verified." shown; focus moved to report heading.
 
+### Worker (STAND-IN model, real PostgreSQL)
+Covered: completed report saved on the **same row** (same `id`), original observations untouched, server-sourced fields from the stored record, prompt contains no email; fenced JSON accepted; invalid JSON retried then `failed` with `INVALID_MODEL_OUTPUT` after 3 attempts and no report; transient error → retry after backoff → `completed`; a replayed job cannot overwrite a completed report or create a new row; crash after claim → lease expires → completed once; crash on final attempt → swept to `failed`; missing image → `IMAGE_UNAVAILABLE` retry; 8 schema-violation cases rejected.
+
 ### Not yet performed
-- Live Gemini request with a freshly rotated API key.
+- Real Gemma 4 call (blocked as above) and acceptance check 3 (bench outside frame) with actual model output.
 - Screen reader (VoiceOver/NVDA) pass — manual.
 - Real browser offline/retry test — manual.
 - Anything on DigitalOcean.

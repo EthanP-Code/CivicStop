@@ -6,7 +6,7 @@ from botocore.config import Config
 
 from .config import Settings
 
-log = logging.getLogger("stopshade.storage")
+log = logging.getLogger("civitstop.storage")
 
 
 class Storage:

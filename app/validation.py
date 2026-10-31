@@ -84,10 +84,12 @@ def validate_observations(raw: str | None) -> list[str]:
 
 def sniff_image(data: bytes, declared_type: str | None) -> str:
     """Return the real content type of a JPEG/PNG, or raise."""
+    # Phone cameras often write JPEGs with extra embedded images (depth/HDR gain maps),
+    # which Pillow reports as MPO; they are still standard JPEGs.
     if data.startswith(JPEG_MAGIC):
-        sniffed, pil_format = "image/jpeg", "JPEG"
+        sniffed, pil_formats = "image/jpeg", ("JPEG", "MPO")
     elif data.startswith(PNG_MAGIC):
-        sniffed, pil_format = "image/png", "PNG"
+        sniffed, pil_formats = "image/png", ("PNG",)
     else:
         raise ApiError(415, "UNSUPPORTED_MEDIA", MSG_IMAGE_TYPE, "image")
     try:
@@ -96,9 +98,11 @@ def sniff_image(data: bytes, declared_type: str | None) -> str:
             img.verify()
     except Exception:
         raise ApiError(415, "UNSUPPORTED_MEDIA", MSG_IMAGE_TYPE, "image")
-    if fmt != pil_format:
+    if fmt not in pil_formats:
         raise ApiError(415, "UNSUPPORTED_MEDIA", MSG_IMAGE_TYPE, "image")
-    # Browsers infer the upload MIME type from the filename. A valid JPEG named
-    # .png is therefore commonly declared image/png. The verified bytes are the
-    # source of truth; callers cannot influence the stored type or extension.
+    declared = (declared_type or "").split(";")[0].strip().lower()
+    if declared == "image/jpg":
+        declared = "image/jpeg"
+    if declared and declared not in ("application/octet-stream",) and declared != sniffed:
+        raise ApiError(415, "UNSUPPORTED_MEDIA", MSG_IMAGE_TYPE, "image")
     return sniffed

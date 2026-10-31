@@ -3,7 +3,7 @@
 (() => {
   const MAX_BYTES = 5 * 1024 * 1024;
   const ALLOWED = ["image/jpeg", "image/png"];
-  const STORE_KEY = "stopshade.receipt";
+  const STORE_KEY = "civitstop.receipt";
   const POLL_MS = 4000;
   const POLL_MAX_MS = 15000;
   const POLL_LIMIT_MS = 5 * 60 * 1000;
@@ -58,11 +58,11 @@
   const summary = $("error-summary");
   const receipt = $("receipt");
   const reportView = $("report-view");
+  const lookupForm = $("lookup-form");
 
   let idemKey = null;
   let inFlight = false;
   let previewUrl = null;
-  let converted = null; // { source, file } when the selected photo had to be re-encoded
   let poll = null;
 
   // ---------- helpers ----------
@@ -89,7 +89,6 @@
   // ---------- form behavior ----------
   imageInput.addEventListener("change", () => {
     idemKey = null; // a new photo means a new intended submission
-    converted = null;
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     previewUrl = null;
     const file = imageInput.files[0];
@@ -190,7 +189,7 @@
     const add = (field, message) => errors.push({ target: setFieldError(field, message), message });
 
     const file = imageInput.files[0];
-    if (!file) add("image", MSG.image);
+    if (!file || !ALLOWED.includes(file.type)) add("image", MSG.image);
     else if (file.size > MAX_BYTES) add("image", MSG.imageSize);
 
     if (mode() === "gps") {
@@ -247,22 +246,8 @@
     idemKey = idemKey || newKey();
     setBusy(true);
 
-    let image;
-    try {
-      image = await uploadableImage(imageInput.files[0]);
-    } catch {
-      image = null;
-    }
-    if (!image || image.size > MAX_BYTES) {
-      const message = image ? MSG.imageSize : MSG.image;
-      showSummary([{ target: setFieldError("image", message), message }]);
-      inFlight = false;
-      setBusy(false);
-      return;
-    }
-
     const fd = new FormData();
-    fd.append("image", image);
+    fd.append("image", imageInput.files[0]);
     fd.append("location", JSON.stringify(buildLocation()));
     fd.append("email", emailInput.value.trim());
     fd.append("observations", JSON.stringify(checkedValues()));
@@ -287,41 +272,6 @@
     }
   });
 
-  // A file named .jpg/.png can hold another format (e.g. a WebP saved as .JPEG).
-  // The server checks the real bytes, so re-encode those as JPEG once per selected file.
-  async function uploadableImage(file) {
-    if (converted && converted.source === file) return converted.file;
-    // Send browser-recognized JPEG/PNG files directly. The server verifies the
-    // bytes and canonicalizes mislabeled files such as a JPEG named .png.
-    if (ALLOWED.includes(file.type)) return file;
-    const head = new Uint8Array(await file.slice(0, 8).arrayBuffer());
-    const isJpeg = head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff;
-    const isPng = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((b, i) => head[i] === b);
-    if (isJpeg || isPng) {
-      const detectedType = isJpeg ? "image/jpeg" : "image/png";
-      if (file.type === detectedType) return file;
-      const extension = isJpeg ? ".jpg" : ".png";
-      const name = file.name.replace(/\.[^.]*$/, "") + extension;
-      converted = {
-        source: file,
-        file: new File([file], name, { type: detectedType, lastModified: file.lastModified }),
-      };
-      return converted.file;
-    }
-
-    const bitmap = await createImageBitmap(file);
-    const canvas = document.createElement("canvas");
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
-    canvas.getContext("2d").drawImage(bitmap, 0, 0);
-    bitmap.close();
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
-    if (!blob) throw new Error("JPEG encoding failed");
-    const name = file.name.replace(/\.[^.]*$/, "") + ".jpg";
-    converted = { source: file, file: new File([blob], name, { type: "image/jpeg" }) };
-    return converted.file;
-  }
-
   function newKey() {
     if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
     const b = new Uint8Array(16);
@@ -338,11 +288,15 @@
     startPolling(rec);
   }
 
-  function showReceipt(rec, status) {
+  function showReceipt(rec, status, title = "Submitted successfully") {
     clearErrors();
     form.hidden = true;
+    lookupForm.hidden = true;
+    $("lookup-switch").hidden = true;
     receipt.hidden = false;
+    $("receipt-title").textContent = title;
     $("ref-id").textContent = rec.reference_id;
+    $("ref-token").textContent = rec.receipt_token;
     renderStatus(status, null, true);
   }
 
@@ -428,15 +382,17 @@
     if (rec) startPolling(rec);
   });
 
-  $("copy-ref").addEventListener("click", async () => {
-    const ref = $("ref-id").textContent;
+  async function copyText(id, name) {
+    const value = $(id).textContent;
     try {
-      await navigator.clipboard.writeText(ref);
-      $("status-live").textContent = "Reference copied.";
+      await navigator.clipboard.writeText(value);
+      $("status-live").textContent = `${name} copied.`;
     } catch {
-      $("status-live").textContent = `Reference is ${ref}`;
+      $("status-live").textContent = `${name} is ${value}`;
     }
-  });
+  }
+  $("copy-ref").addEventListener("click", () => copyText("ref-id", "Reference"));
+  $("copy-token").addEventListener("click", () => copyText("ref-token", "Receipt token"));
 
   $("new-report").addEventListener("click", () => {
     stopPolling();
@@ -452,9 +408,87 @@
     $("report-body").replaceChildren();
     reportView.hidden = true;
     receipt.hidden = true;
+    lookupForm.hidden = true;
+    lookupForm.reset();
+    $("lookup-switch").hidden = false;
     form.hidden = false;
     idemKey = null;
     imageInput.focus();
+  });
+
+  // ---------- look up an existing report ----------
+  const REF_RE = /^BUS-\d{4}-[A-Z0-9]{8}$/;
+  const TOKEN_RE = /^[A-Za-z0-9_-]{20,128}$/;
+  const LOOKUP_MSG = {
+    ref: "Enter a reference like BUS-2026-AB12CD34.",
+    token: "Enter the receipt token you saved when you submitted.",
+    notFound: "We couldn't find a report with that reference and receipt token. Check both and try again.",
+    server: "We couldn't load this report right now. Please try again.",
+  };
+
+  function clearLookupErrors() {
+    clearErrors();
+    for (const id of ["lookup-ref", "lookup-token"]) {
+      $(`${id}-error`).textContent = "";
+      $(id).removeAttribute("aria-invalid");
+    }
+  }
+
+  function lookupFieldError(id, message) {
+    $(`${id}-error`).textContent = message;
+    $(id).setAttribute("aria-invalid", "true");
+    return { target: id, message };
+  }
+
+  function setLookupMode(on) {
+    clearErrors();
+    form.hidden = on;
+    lookupForm.hidden = !on;
+    $("lookup-switch").hidden = on;
+    if (on) $("lookup-heading").focus();
+    else imageInput.focus();
+  }
+  $("show-lookup").addEventListener("click", () => setLookupMode(true));
+  $("hide-lookup").addEventListener("click", () => setLookupMode(false));
+
+  lookupForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (inFlight) return;
+    clearLookupErrors();
+    const ref = $("lookup-ref").value.trim().toUpperCase();
+    const token = $("lookup-token").value.trim();
+    const errors = [];
+    if (!REF_RE.test(ref)) errors.push(lookupFieldError("lookup-ref", LOOKUP_MSG.ref));
+    if (!TOKEN_RE.test(token)) errors.push(lookupFieldError("lookup-token", LOOKUP_MSG.token));
+    if (errors.length) { showSummary(errors); return; }
+
+    inFlight = true;
+    const btn = $("lookup-btn");
+    btn.disabled = true;
+    btn.textContent = "Looking up…";
+    try {
+      const res = await fetchWithRetry(`/api/v1/submissions/${encodeURIComponent(ref)}`, {
+        headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+      });
+      if (res.status === 404 || res.status === 401) { showSummary(LOOKUP_MSG.notFound); return; }
+      if (!res.ok) { showSummary(LOOKUP_MSG.server); return; }
+      const data = await res.json();
+      const rec = { reference_id: data.reference_id, receipt_token: token };
+      storage.set(rec);
+      showReceipt(rec, data.status, "Report found");
+      renderStatus(data.status, data.error, true);
+      if (data.status === "completed" && data.report) renderReport(data);
+      else {
+        $("receipt-heading").focus();
+        if (data.status !== "failed") startPolling(rec);
+      }
+    } catch {
+      showSummary("We couldn't reach the server. Check your connection and try again.");
+    } finally {
+      inFlight = false;
+      btn.disabled = false;
+      btn.textContent = "View report";
+    }
   });
 
   // ---------- report rendering (textContent only; model output is untrusted) ----------

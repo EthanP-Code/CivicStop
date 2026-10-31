@@ -1,4 +1,4 @@
-"""StopShade API: accepts bus-stop observations and serves status/report."""
+"""CivitStop API: accepts bus-stop observations and serves status/report."""
 import hmac
 import logging
 import time
@@ -25,7 +25,7 @@ from .validation import (
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-log = logging.getLogger("stopshade.api")
+log = logging.getLogger("civitstop.api")
 
 STATIC_DIR = Path(__file__).parent / "static"
 CHUNK = 64 * 1024
@@ -63,7 +63,7 @@ def create_app(settings: Settings | None = None, pool=None, storage: Storage | N
         if owned_pool is not None:
             owned_pool.close()
 
-    app = FastAPI(title="StopShade", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+    app = FastAPI(title="CivitStop", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.settings = settings
     app.state.pool = pool
     app.state.storage = storage
